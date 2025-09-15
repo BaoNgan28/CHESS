@@ -1,0 +1,1099 @@
+<!DOCTYPE html>
+<html lang="vi" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lý Thuyết Trò Chơi và Ứng Dụng trong Cờ Vua</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: Thêm phần "Code Review" mới. Luồng học tập hiện tại: Giới thiệu -> Lý thuyết -> Giải thích chi tiết -> Code Review (MỚI) -> Mô phỏng -> Chơi cờ. Luồng này rất hợp lý, đi từ khái niệm trừu tượng đến phân tích mã cụ thể trước khi xem nó hoạt động. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Mã giả hoàn chỉnh của thuật toán Minimax với Alpha-Beta.
+        - Goal: Cho phép người dùng phân tích từng phần của mã giả một cách tương tác.
+        - Viz/Presentation Method: 
+            - Mã giả được định dạng trong thẻ <pre><code>, với các khối logic được bọc trong thẻ <span> có thể nhấp vào.
+            - Một modal (popup) được thiết kế đẹp mắt, ẩn theo mặc định.
+        - Interaction: Người dùng nhấp vào một khối mã. Một modal sẽ xuất hiện với lời giải thích chi tiết về khối mã đó. Nhấp vào nút đóng hoặc nền mờ sẽ đóng modal.
+        - Justification: Cung cấp một cách tương tác để "đọc code" giúp người học hiểu sâu hơn về cách các khái niệm lý thuyết được chuyển thành logic lập trình. Nó hiệu quả hơn nhiều so với việc chỉ đọc một khối văn bản tĩnh.
+        - Library/Method: Vanilla JavaScript để xử lý các sự kiện nhấp chuột và điều khiển hiển thị modal.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #fdfaf6;
+            color: #3d3d3d;
+        }
+        .wood-dark { background-color: #b58863; }
+        .wood-light { background-color: #f0d9b5; }
+        .selected-piece {
+            box-shadow: 0 0 10px 3px rgba(255, 215, 0, 0.7);
+            border-radius: 50%;
+        }
+        .possible-move::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 30%;
+            height: 30%;
+            background-color: rgba(0, 0, 0, 0.2);
+            border-radius: 50%;
+        }
+        .code-highlight {
+            background-color: #fefcbf;
+            transition: background-color 0.1s;
+        }
+        .last-move {
+            background-color: rgba(255, 215, 0, 0.4);
+        }
+        .thinking-highlight {
+            background-color: rgba(16, 185, 129, 0.6);
+            box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.7);
+            transition: background-color 0.1s ease-in-out;
+        }
+        
+        /* Algorithm Simulation Styles */
+        .tree { display: flex; flex-direction: column; align-items: center; }
+        .tree-node {
+            padding: 5px 10px; border: 2px solid #ccc; border-radius: 8px; margin: 10px;
+            display: flex; flex-direction: column; align-items: center; position: relative;
+            background-color: white; min-width: 120px; font-family: monospace; font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+        .tree-node.max-node { border-color: #3b82f6; }
+        .tree-node.min-node { border-color: #ef4444; }
+        .tree-node.leaf-node { border-color: #6b7280; background-color: #f3f4f6; }
+        .tree-node.node-active { transform: scale(1.1); box-shadow: 0 0 15px rgba(59, 130, 246, 0.7); }
+        .tree-node.node-pruned { opacity: 0.4; background-color: #e5e7eb; border-style: dashed; }
+        .node-children { display: flex; justify-content: center; position: relative; padding-top: 20px; }
+        .tree-node::before {
+            content: ''; position: absolute; bottom: 100%; left: 50%;
+            border-left: 2px solid #9ca3af; width: 0; height: 20px; transform: translateX(-1px);
+        }
+        .tree .tree-node:first-child::before { display: none; } /* No line for root */
+        .node-children::before {
+            content: ''; position: absolute; top: 0; left: 50%; right: 50%;
+            border-top: 2px solid #9ca3af; height: 0;
+        }
+        .node-children .tree:first-child > .node-children::before { left: 50%; }
+        .node-children .tree:last-child > .node-children::before { right: 50%; }
+
+        /* Code Review Section */
+        .code-block {
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .code-block:hover {
+            background-color: rgba(251, 191, 36, 0.3);
+        }
+
+        /* Modal Styles */
+        .modal-enter { opacity: 0; transform: scale(0.95); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: all 300ms; }
+        .modal-leave { opacity: 1; transform: scale(1); }
+        .modal-leave-active { opacity: 0; transform: scale(0.95); transition: all 300ms; }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Roboto+Slab:wght@700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-stone-100 text-stone-800">
+
+    <header class="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-50">
+        <nav class="container mx-auto px-6 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold text-amber-800" style="font-family: 'Roboto Slab', serif;">AI Cờ Vua</h1>
+            <div class="hidden md:flex space-x-8">
+                <a href="#introduction" class="text-stone-600 hover:text-amber-800 transition-colors">Giới thiệu</a>
+                <a href="#theory" class="text-stone-600 hover:text-amber-800 transition-colors">Lý thuyết</a>
+                <a href="#explanation" class="text-stone-600 hover:text-amber-800 transition-colors">Giải thích</a>
+                <a href="#code-review" class="text-stone-600 hover:text-amber-800 transition-colors">Code Review</a>
+                <a href="#algorithm-simulation" class="text-stone-600 hover:text-amber-800 transition-colors">Mô phỏng</a>
+                <a href="#game-simulation" class="text-stone-600 hover:text-amber-800 transition-colors">Chơi Cờ</a>
+            </div>
+        </nav>
+    </header>
+
+    <main class="container mx-auto px-6 py-12">
+        <section id="introduction" class="text-center mb-24 scroll-mt-20">
+            <h2 class="text-4xl md:text-5xl font-bold mb-4" style="font-family: 'Roboto Slab', serif;">Lý Thuyết Trò Chơi và Cờ Vua</h2>
+            <p class="max-w-3xl mx-auto text-lg text-stone-600">
+                Khám phá cách các nguyên tắc của lý thuyết trò chơi và thuật toán tìm kiếm thông minh được áp dụng để tạo ra một trí tuệ nhân tạo có khả năng chơi cờ vua.
+            </p>
+        </section>
+
+        <section id="theory" class="mb-24 scroll-mt-20">
+            <h3 class="text-3xl font-bold text-center mb-12" style="font-family: 'Roboto Slab', serif;">Nền tảng Lý thuyết</h3>
+            <div class="grid md:grid-cols-2 gap-12">
+                 <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h4 class="text-2xl font-bold mb-4 text-amber-800">Lý Thuyết Trò Chơi</h4>
+                    <p class="text-stone-600 leading-relaxed">
+                        Lý thuyết trò chơi là một nhánh của toán học ứng dụng nghiên cứu về các tình huống chiến lược, trong đó kết quả lựa chọn của một người chơi phụ thuộc vào hành động của những người chơi khác. Cờ vua là một "trò chơi có tổng bằng không", nghĩa là lợi thế của một bên chính là bất lợi của bên kia.
+                    </p>
+                </div>
+                <div class="bg-white p-8 rounded-lg shadow-md">
+                    <h4 class="text-2xl font-bold mb-4 text-amber-800">Thuật toán Minimax</h4>
+                    <p class="text-stone-600 leading-relaxed">
+                        Đây là "bộ não" của AI cờ vua. Nó hoạt động bằng cách giả định rằng cả hai người chơi đều chơi một cách tối ưu. AI (người chơi "Max") sẽ cố gắng tối đa hóa điểm số của mình, trong khi giả định rằng đối thủ (người chơi "Min") sẽ luôn cố gắng tối thiểu hóa điểm số đó. Cắt tỉa Alpha-Beta là một kỹ thuật tối ưu hóa giúp loại bỏ các nhánh tìm kiếm vô ích, tăng tốc độ tính toán đáng kể.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <section id="explanation" class="mb-24 scroll-mt-20">
+            <h3 class="text-3xl font-bold text-center mb-12" style="font-family: 'Roboto Slab', serif;">Giải thích chi tiết Thuật toán</h3>
+            <div class="grid md:grid-cols-2 gap-12">
+                <div class="bg-white p-8 rounded-lg shadow-md border-l-4 border-red-500">
+                    <h4 class="text-2xl font-bold mb-4 text-red-700">Minimax Cơ bản</h4>
+                    <p class="text-stone-600 leading-relaxed mb-4">
+                        Tưởng tượng thuật toán tạo ra một cây khổng lồ của mọi nước đi có thể. Nó hoạt động bằng cách đi đến tận cùng của cây (các nước đi cuối cùng có thể thấy trước), sau đó làm việc ngược trở lại để chọn nước đi tốt nhất.
+                    </p>
+                    <ol class="list-decimal list-inside space-y-2 text-stone-700">
+                        <li><b>Xây dựng cây:</b> Bắt đầu từ vị trí hiện tại, thuật toán phân nhánh ra mọi nước đi khả thi cho mình, rồi từ mỗi nước đi đó, lại phân nhánh ra mọi nước đi của đối thủ, và cứ thế tiếp tục cho đến một độ sâu nhất định.</li>
+                        <li><b>Đánh giá ở lá:</b> Tại điểm sâu nhất (các "lá" của cây), thuật toán sử dụng một hàm để đánh giá bàn cờ và cho một điểm số (ví dụ: +10 nếu AI đang thắng, -10 nếu đang thua).</li>
+                        <li><b>Làm việc ngược lên:</b>
+                            <ul class="list-disc list-inside ml-4 mt-1">
+                                <li>Ở tầng của đối thủ (<b>tầng MIN</b>), thuật toán giả định đối thủ sẽ chọn nước đi có điểm số <b>thấp nhất</b>.</li>
+                                <li>Ở tầng của AI (<b>tầng MAX</b>), thuật toán sẽ chọn nước đi có điểm số <b>cao nhất</b>.</li>
+                            </ul>
+                        </li>
+                        <li><b>Chọn nước đi:</b> Bằng cách lặp lại quá trình này lên đến gốc của cây, AI sẽ biết được nước đi ban đầu nào dẫn đến kết quả tốt nhất có thể, giả sử đối thủ luôn chơi hoàn hảo.</li>
+                    </ol>
+                </div>
+                <div class="bg-white p-8 rounded-lg shadow-md border-l-4 border-blue-500">
+                    <h4 class="text-2xl font-bold mb-4 text-blue-700">Minimax + Cắt tỉa Alpha-Beta</h4>
+                    <p class="text-stone-600 leading-relaxed mb-4">
+                        Đây là một phiên bản thông minh hơn của Minimax. Nó nhận ra rằng không phải nhánh nào của cây cũng cần được khám phá. Nó "cắt tỉa" những nhánh mà nó biết chắc chắn sẽ không tốt hơn một lựa chọn mà nó đã tìm thấy.
+                    </p>
+                    <ol class="list-decimal list-inside space-y-2 text-stone-700">
+                        <li><b>Giới thiệu Alpha và Beta:</b> Thuật toán sử dụng hai biến:
+                            <ul class="list-disc list-inside ml-4 mt-1">
+                                <li><b>Alpha (α):</b> Điểm số <b>tốt nhất</b> (cao nhất) mà người chơi MAX (AI) có thể đảm bảo cho mình cho đến nay.</li>
+                                <li><b>Beta (β):</b> Điểm số <b>tốt nhất</b> (thấp nhất) mà người chơi MIN (Đối thủ) có thể đảm bảo cho mình cho đến nay.</li>
+                            </ul>
+                        </li>
+                        <li><b>Điều kiện cắt tỉa:</b> Trong khi duyệt cây, nếu thuật toán gặp một tình huống mà <b>Beta ≤ Alpha</b>, nó sẽ ngay lập tức ngừng khám phá nhánh đó.</li>
+                        <li><b>Tại sao nó hoạt động?</b>
+                            <ul class="list-disc list-inside ml-4 mt-1">
+                                <li>Nếu người chơi MIN tìm thấy một nước đi tệ hơn (thấp hơn) so với lựa chọn mà người chơi MAX đã có (alpha), MAX sẽ không bao giờ để MIN đi nước đó. Vì vậy, không cần phải xem xét các nước đi khác của MIN trong nhánh này nữa.</li>
+                            </ul>
+                        </li>
+                         <li><b>Kết quả:</b> Thuật toán vẫn đưa ra quyết định chính xác y hệt như Minimax cơ bản, nhưng với tốc độ nhanh hơn rất nhiều vì nó không lãng phí thời gian vào những nước đi rõ ràng là tồi tệ.</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <section id="code-review" class="mb-24 scroll-mt-20">
+            <h3 class="text-3xl font-bold text-center mb-4" style="font-family: 'Roboto Slab', serif;">Đánh giá Mã giả (Code Review)</h3>
+            <p class="max-w-4xl mx-auto text-center text-lg text-stone-600 mb-8">
+                Nhấp vào bất kỳ khối mã nào dưới đây để xem giải thích chi tiết về chức năng của nó trong thuật toán Minimax với Cắt tỉa Alpha-Beta.
+            </p>
+            <div class="max-w-2xl mx-auto bg-gray-800 text-white p-6 rounded-lg shadow-lg font-mono text-sm">
+                <pre><code><span class="code-block" data-key="signature">function minimax(node, depth, isMax, alpha, beta)</span>
+  <span class="code-block" data-key="base-case">if depth == 0 or is_terminal(node):
+    return evaluate(node)</span>
+
+  <span class="code-block" data-key="max-block">if isMax:
+    maxEval = -infinity
+    <span class="code-block" data-key="max-loop">for each child of node:
+      eval = minimax(child, depth-1, false, alpha, beta)
+      maxEval = max(maxEval, eval)
+      alpha = max(alpha, eval)</span>
+      <span class="code-block" data-key="max-prune">if beta <= alpha:
+        break // Cắt tỉa nhánh</span>
+    <span class="code-block" data-key="max-return">return maxEval</span></span>
+  <span class="code-block" data-key="min-block">else: // isMin
+    minEval = +infinity
+    <span class="code-block" data-key="min-loop">for each child of node:
+      eval = minimax(child, depth-1, true, alpha, beta)
+      minEval = min(minEval, eval)
+      beta = min(beta, eval)</span>
+      <span class="code-block" data-key="min-prune">if beta <= alpha:
+        break // Cắt tỉa nhánh</span>
+    <span class="code-block" data-key="min-return">return minEval</span></span>
+</code></pre>
+            </div>
+        </section>
+
+        <section id="algorithm-simulation" class="mb-24 scroll-mt-20">
+            <h3 class="text-3xl font-bold text-center mb-4" style="font-family: 'Roboto Slab', serif;">Mô phỏng Thuật toán</h3>
+            <p class="max-w-4xl mx-auto text-center text-lg text-stone-600 mb-8">
+                Tương tác trực tiếp với thuật toán Minimax để hiểu cách nó duyệt cây và đưa ra quyết định. Chọn một thuật toán, tạo cây trò chơi và xem nó hoạt động.
+            </p>
+            <div class="flex flex-col gap-8 items-center">
+                 <div id="tree-container" class="bg-gray-50 p-4 rounded-lg shadow-inner min-h-[400px] w-full overflow-x-auto">
+                    <!-- Tree will be rendered here -->
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md w-full lg:max-w-4xl">
+                    <h4 class="text-xl font-bold mb-4 text-center">Bảng điều khiển & Giải thích</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-stone-700">Chọn thuật toán:</label>
+                                <div class="mt-2 flex space-x-4">
+                                    <label class="inline-flex items-center"><input type="radio" name="algo-select" value="minimax" class="form-radio text-blue-600"> <span class="ml-2">Minimax</span></label>
+                                    <label class="inline-flex items-center"><input type="radio" name="algo-select" value="alpha-beta" checked class="form-radio text-blue-600"> <span class="ml-2">Minimax + Alpha-Beta</span></label>
+                                </div>
+                            </div>
+                            <div>
+                                <label for="tree-depth-slider" class="block text-sm font-medium text-stone-700">Độ sâu: <span id="tree-depth-value">2</span></label>
+                                <input id="tree-depth-slider" type="range" min="2" max="4" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            </div>
+                            <div>
+                                <label for="tree-branches-slider" class="block text-sm font-medium text-stone-700">Số nhánh: <span id="tree-branches-value">2</span></label>
+                                <input id="tree-branches-slider" type="range" min="2" max="3" value="2" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                            </div>
+                            <div class="flex space-x-2">
+                                 <button id="run-algo-btn" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">Chạy Mô phỏng</button>
+                                 <button id="reset-algo-btn" class="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors">Đặt lại</button>
+                            </div>
+                        </div>
+                        <div>
+                             <h5 class="font-semibold mb-2 text-sm">Giải thích từng bước:</h5>
+                             <div id="algo-explanation" class="h-20 bg-blue-100 border-l-4 border-blue-500 text-blue-800 p-2 rounded text-sm overflow-y-auto mb-4">...</div>
+                             <h5 class="font-semibold mb-2 text-sm">Mã giả:</h5>
+                             <pre class="bg-stone-50 p-2 rounded border text-xs overflow-x-auto h-[180px]"><code id="algo-pseudocode">
+</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="game-simulation" class="scroll-mt-20">
+            <h3 class="text-3xl font-bold text-center mb-4" style="font-family: 'Roboto Slab', serif;">Mô phỏng Cờ Vua Tương tác</h3>
+             <p class="max-w-4xl mx-auto text-center text-lg text-stone-600 mb-8">
+                Thử sức với AI! Bạn chơi quân Trắng. Khi đến lượt AI (quân Đen), bạn có thể theo dõi quá trình suy nghĩ của nó ở bên phải, đồng thời quan sát các ô cờ được phân tích sáng lên.
+            </p>
+            <div class="flex flex-col lg:flex-row gap-8 justify-center">
+                <div class="flex-shrink-0 mx-auto">
+                    <div id="chess-board" class="grid grid-cols-8 grid-rows-8 w-full max-w-[480px] md:max-w-[560px] aspect-square shadow-2xl"></div>
+                </div>
+                <div class="flex-grow w-full lg:max-w-md bg-white p-4 rounded-lg shadow-md">
+                     <h4 class="text-xl font-bold mb-2 text-center">Quá trình suy nghĩ của AI</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 gap-4">
+                        <div>
+                            <h5 class="font-semibold mb-1 text-sm">Cây quyết định (Cờ vua):</h5>
+                            <div id="thinking-tree" class="h-40 bg-stone-50 p-2 rounded border overflow-y-auto text-xs">Chờ AI suy nghĩ...</div>
+                        </div>
+                        <div>
+                             <h5 class="font-semibold mb-1 text-sm">Giải thích (Cờ vua):</h5>
+                            <div id="ai-explanation" class="h-20 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-2 rounded text-sm">...</div>
+                        </div>
+                        <div>
+                            <h5 class="font-semibold mb-1 text-sm">Mã giả (Cờ vua):</h5>
+                            <pre class="bg-stone-50 p-2 rounded border text-xs overflow-x-auto"><code id="game-pseudocode">
+function minimax(depth, isMax, alpha, beta)
+  if depth == 0: return evaluate()
+
+  if isMax:
+    maxEval = -inf
+    for each move:
+      eval = minimax(depth-1, false, a, b)
+      maxEval = max(maxEval, eval)
+      alpha = max(alpha, eval)
+      if beta <= alpha: break
+    return maxEval
+  else:
+    minEval = +inf
+    for each move:
+      eval = minimax(depth-1, true, a, b)
+      minEval = min(minEval, eval)
+      beta = min(beta, eval)
+      if beta <= alpha: break
+    return minEval
+                            </code></pre>
+                        </div>
+                    </div>
+                </div>
+                 <div class="w-full lg:w-64 flex-shrink-0 mx-auto">
+                     <div class="bg-white p-6 rounded-lg shadow-md">
+                        <h4 class="text-xl font-bold mb-4">Bảng điều khiển</h4>
+                        <div id="status" class="text-lg font-semibold mb-4 min-h-[30px]">Lượt của Trắng.</div>
+                        <div id="ai-thinking" class="text-stone-600 hidden">
+                            <div class="flex items-center">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-amber-700" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                AI đang suy nghĩ...
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label for="difficulty-input" class="block text-sm font-medium text-stone-700 mb-1">Độ sâu tìm kiếm:</label>
+                            <input type="number" id="difficulty-input" name="difficulty" class="w-full bg-white border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-amber-500 focus:border-amber-500" min="1" max="25" value="3">
+                            <p class="text-xs text-red-600 mt-1">Cảnh báo: Độ sâu > 4 có thể rất chậm!</p>
+                        </div>
+                        <button id="skip-ai-btn" class="w-full bg-gray-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-gray-600 transition-colors mt-4 hidden">Bỏ qua Animation</button>
+                        <button id="restart-game-btn" class="w-full bg-amber-800 text-white font-bold py-2 px-4 rounded-lg hover:bg-amber-700 transition-colors mt-2">Chơi lại</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal for Code Review -->
+    <div id="code-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 hidden">
+        <div id="modal-content-wrapper" class="bg-white rounded-lg shadow-2xl w-full max-w-lg overflow-hidden modal-enter">
+            <div class="p-6">
+                <div class="flex justify-between items-start">
+                    <h3 id="modal-title" class="text-2xl font-bold text-amber-800" style="font-family: 'Roboto Slab', serif;"></h3>
+                    <button id="modal-close-btn" class="text-gray-400 hover:text-gray-600 transition-colors">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <p id="modal-body" class="mt-4 text-stone-600 leading-relaxed"></p>
+            </div>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    // Shared utility function
+    const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+    // --- CODE REVIEW SCRIPT ---
+    const codeReview = (() => {
+        const modal = document.getElementById('code-modal');
+        const modalContentWrapper = document.getElementById('modal-content-wrapper');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+        const closeBtn = document.getElementById('modal-close-btn');
+        const codeBlocks = document.querySelectorAll('.code-block');
+
+        const explanations = {
+            'signature': {
+                title: 'Khai báo Hàm',
+                body: 'Đây là hàm đệ quy chính, là trái tim của thuật toán. Nó nhận vào trạng thái hiện tại của trò chơi (node), độ sâu cần tìm kiếm, lượt của ai (isMax), và các giá trị alpha, beta.'
+            },
+            'base-case': {
+                title: 'Điều kiện Dừng (Base Case)',
+                body: 'Đây là điểm dừng của đệ quy. Nếu đã đạt đến độ sâu tìm kiếm tối đa hoặc trò chơi đã kết thúc (chiếu hết, hết nước đi), hàm sẽ trả về điểm số đánh giá của bàn cờ hiện tại mà không cần đi sâu hơn nữa.'
+            },
+            'max-block': {
+                title: 'Lượt của MAX (AI)',
+                body: 'Khối mã này được thực thi khi đến lượt của người chơi MAX (AI). Mục tiêu là tìm ra nước đi dẫn đến kết quả có điểm số cao nhất có thể.'
+            },
+            'max-loop': {
+                title: 'Vòng lặp của MAX',
+                body: 'AI duyệt qua tất cả các nước đi con có thể. Với mỗi nước đi, nó gọi lại chính hàm minimax cho lượt của MIN (giả định đối thủ sẽ chơi nước tốt nhất cho họ), sau đó cập nhật điểm số cao nhất (maxEval) và giá trị alpha.'
+            },
+            'max-prune': {
+                title: 'Cắt tỉa ở nút MAX',
+                body: 'Đây là bước tối ưu hóa quan trọng. Nếu Beta (lựa chọn tốt nhất của MIN) nhỏ hơn hoặc bằng Alpha (lựa chọn tốt nhất của MAX), điều đó có nghĩa là MIN đã có một lựa chọn khác ở nhánh khác tốt hơn cho họ. MIN sẽ không bao giờ đi vào nhánh này, vì vậy MAX có thể ngừng tìm kiếm và "cắt tỉa" các nhánh con còn lại.'
+            },
+            'max-return': {
+                title: 'Trả về giá trị MAX',
+                body: 'Sau khi đã duyệt qua tất cả các nhánh con cần thiết, hàm trả về giá trị maxEval, là điểm số tốt nhất mà MAX có thể đạt được từ nút này.'
+            },
+            'min-block': {
+                title: 'Lượt của MIN (Đối thủ)',
+                body: 'Tương tự khối MAX, khối này xử lý lượt của người chơi MIN (đối thủ). Mục tiêu của MIN là tìm ra nước đi dẫn đến kết quả có điểm số thấp nhất (bất lợi nhất cho AI).'
+            },
+            'min-loop': {
+                title: 'Vòng lặp của MIN',
+                body: 'Đối thủ duyệt qua tất cả các nước đi con. Với mỗi nước đi, nó gọi lại hàm minimax cho lượt của MAX để xem AI sẽ đáp trả thế nào, sau đó cập nhật điểm số thấp nhất (minEval) và giá trị beta.'
+            },
+            'min-prune': {
+                title: 'Cắt tỉa ở nút MIN',
+                body: 'Nếu Beta (lựa chọn tốt nhất của MIN) trở nên nhỏ hơn hoặc bằng Alpha (lựa chọn tốt nhất của MAX), điều đó có nghĩa là MAX đã có một lựa chọn khác ở nhánh khác tốt hơn. MAX sẽ không bao giờ cho phép trò chơi đi theo nhánh này. Vì vậy, MIN có thể ngừng tìm kiếm ở đây.'
+            },
+            'min-return': {
+                title: 'Trả về giá trị MIN',
+                body: 'Sau khi duyệt xong, hàm trả về minEval, là điểm số tệ nhất cho AI mà MIN có thể ép buộc từ nút này.'
+            }
+        };
+
+        function openModal(key) {
+            const data = explanations[key];
+            if (!data) return;
+            
+            modalTitle.textContent = data.title;
+            modalBody.textContent = data.body;
+            
+            modal.classList.remove('hidden');
+            requestAnimationFrame(() => {
+                modalContentWrapper.classList.remove('modal-enter');
+                modalContentWrapper.classList.add('modal-enter-active');
+            });
+        }
+
+        function closeModal() {
+            modalContentWrapper.classList.remove('modal-enter-active');
+            modalContentWrapper.classList.add('modal-leave-active');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                modalContentWrapper.classList.remove('modal-leave-active');
+                 modalContentWrapper.classList.add('modal-enter');
+            }, 300);
+        }
+
+        codeBlocks.forEach(block => {
+            block.addEventListener('click', () => {
+                openModal(block.dataset.key);
+            });
+        });
+
+        closeBtn.addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                closeModal();
+            }
+        });
+    })();
+    
+    // --- ALGORITHM SIMULATION SCRIPT ---
+    const algoSim = (() => {
+        const depthSlider = document.getElementById('tree-depth-slider');
+        const branchesSlider = document.getElementById('tree-branches-slider');
+        const depthValueSpan = document.getElementById('tree-depth-value');
+        const branchesValueSpan = document.getElementById('tree-branches-value');
+        const runBtn = document.getElementById('run-algo-btn');
+        const resetBtn = document.getElementById('reset-algo-btn');
+        const treeContainer = document.getElementById('tree-container');
+        const explanationEl = document.getElementById('algo-explanation');
+        const pseudocodeEl = document.getElementById('algo-pseudocode');
+        const algoSelectRadios = document.querySelectorAll('input[name="algo-select"]');
+
+        const alphaBetaPseudocode = `
+function minimax(node, depth, isMax, a, b)
+  if depth == 0 or is_terminal(node):
+    return evaluate(node)
+
+  if isMax:
+    maxEval = -inf
+    for each child:
+      eval = minimax(child, d-1, false, a, b)
+      maxEval = max(maxEval, eval)
+      a = max(a, eval)
+      if b <= a: break // Cắt tỉa
+    return maxEval
+  else: // isMin
+    minEval = +inf
+    for each child:
+      eval = minimax(child, d-1, true, a, b)
+      minEval = min(minEval, eval)
+      b = min(b, eval)
+      if b <= a: break // Cắt tỉa
+    return minEval`.trim().split('\n');
+
+        const minimaxPseudocode = `
+function minimax(node, depth, isMax)
+  if depth == 0 or is_terminal(node):
+    return evaluate(node)
+
+  if isMax:
+    maxEval = -inf
+    for each child:
+      eval = minimax(child, d-1, false)
+      maxEval = max(maxEval, eval)
+    return maxEval
+  else: // isMin
+    minEval = +inf
+    for each child:
+      eval = minimax(child, d-1, true)
+      minEval = min(minEval, eval)
+    return minEval`.trim().split('\n');
+
+        let nodeId = 0;
+        let rootNode = null;
+        let isSimulating = false;
+
+        function updatePseudocodeDisplay() {
+            const selectedAlgo = document.querySelector('input[name="algo-select"]:checked').value;
+            const lines = selectedAlgo === 'alpha-beta' ? alphaBetaPseudocode : minimaxPseudocode;
+            pseudocodeEl.innerHTML = lines.join('\n');
+        }
+
+        function highlightPseudocode(lines) {
+             const selectedAlgo = document.querySelector('input[name="algo-select"]:checked').value;
+            const codeLines = selectedAlgo === 'alpha-beta' ? alphaBetaPseudocode : minimaxPseudocode;
+            pseudocodeEl.innerHTML = codeLines.map((l, i) =>
+                lines.includes(i) ? `<span class="code-highlight">${l}</span>` : l
+            ).join('\n');
+        }
+
+        function generateSimpleTree(depth, maxBranches, isMax = true) {
+            const node = { id: `node-${nodeId++}`, type: isMax ? 'MAX' : 'MIN', value: null, alpha: -Infinity, beta: Infinity, children: [] };
+            if (depth === 0) {
+                node.type = 'LEAF';
+                node.value = Math.floor(Math.random() * 20);
+                return node;
+            }
+            const numBranches = Math.floor(Math.random() * (maxBranches - 1)) + 2;
+            for (let i = 0; i < numBranches; i++) node.children.push(generateSimpleTree(depth - 1, maxBranches, !isMax));
+            return node;
+        }
+
+        function renderTree(node) {
+            const nodeEl = document.createElement('div');
+            nodeEl.id = node.id;
+            nodeEl.className = `tree-node ${node.type.toLowerCase()}-node`;
+            nodeEl.innerHTML = `<div>${node.type}</div><div class="node-value">v: ?</div><div class="node-ab">α: -∞, β: +∞</div>`;
+            if (node.type === 'LEAF') nodeEl.querySelector('.node-value').textContent = `v: ${node.value}`;
+
+            const childrenContainer = document.createElement('div');
+            childrenContainer.className = 'node-children';
+            for (const child of node.children) {
+                const childTree = document.createElement('div');
+                childTree.className = 'tree';
+                const [childEl, childSubtree] = renderTree(child);
+                childTree.appendChild(childEl);
+                childTree.appendChild(childSubtree);
+                childrenContainer.appendChild(childTree);
+            }
+            return [nodeEl, childrenContainer];
+        }
+        
+        function updateNodeVisual(node) {
+            const el = document.getElementById(node.id);
+            if (!el) return;
+            el.querySelector('.node-value').textContent = `v: ${node.value === null ? '?' : node.value}`;
+            const useAlphaBeta = document.querySelector('input[name="algo-select"]:checked').value === 'alpha-beta';
+            if (useAlphaBeta) {
+                const alphaText = node.alpha === -Infinity ? '-∞' : node.alpha;
+                const betaText = node.beta === Infinity ? '+∞' : node.beta;
+                el.querySelector('.node-ab').textContent = `α: ${alphaText}, β: ${betaText}`;
+            } else {
+                 el.querySelector('.node-ab').textContent = ``;
+            }
+        }
+
+        async function runMinimaxSimulation(node) {
+            if (!isSimulating) return;
+            const useAlphaBeta = document.querySelector('input[name="algo-select"]:checked').value === 'alpha-beta';
+            const nodeEl = document.getElementById(node.id);
+            nodeEl.classList.add('node-active');
+
+            if (node.type === 'LEAF') {
+                highlightPseudocode([1, 2]);
+                explanationEl.textContent = `Đến nút lá. Trả về giá trị: ${node.value}.`;
+                await delay(800);
+                nodeEl.classList.remove('node-active');
+                return node.value;
+            }
+
+            if (node.type === 'MAX') {
+                highlightPseudocode(useAlphaBeta ? [4, 5] : [4, 5]);
+                explanationEl.textContent = `Thăm nút MAX. Bắt đầu với maxEval = -∞.`;
+                await delay(800);
+                node.value = -Infinity;
+
+                for (const child of node.children) {
+                    highlightPseudocode(useAlphaBeta ? [6] : [6]);
+                    explanationEl.textContent = `Đi xuống nút con của MAX.`;
+                    updateNodeVisual(node);
+                    await delay(800);
+                    
+                    if (useAlphaBeta) { child.alpha = node.alpha; child.beta = node.beta; }
+                    const eval = await runMinimaxSimulation(child);
+
+                    nodeEl.classList.add('node-active');
+                    node.value = Math.max(node.value, eval);
+                    if(useAlphaBeta) node.alpha = Math.max(node.alpha, eval);
+                    updateNodeVisual(node);
+                    
+                    highlightPseudocode(useAlphaBeta ? [7, 8, 9] : [7, 8]);
+                    explanationEl.textContent = `Nút con trả về ${eval}. Cập nhật maxEval=${node.value}` + (useAlphaBeta ? `, alpha=${node.alpha}.` : '.');
+                    await delay(1200);
+
+                    if (useAlphaBeta && node.beta <= node.alpha) {
+                        highlightPseudocode([10]);
+                        explanationEl.textContent = `CẮT TỈA! (beta ${node.beta} <= alpha ${node.alpha}). Bỏ qua các nhánh còn lại.`;
+                        const remainingChildren = node.children.slice(node.children.indexOf(child) + 1);
+                        remainingChildren.forEach(prunedChild => { document.getElementById(prunedChild.id).classList.add('node-pruned'); });
+                        await delay(1500);
+                        break;
+                    }
+                }
+                explanationEl.textContent = `Nút MAX hoàn tất. Trả về giá trị: ${node.value}.`;
+                await delay(800);
+                nodeEl.classList.remove('node-active');
+                return node.value;
+
+            } else { // MIN
+                highlightPseudocode(useAlphaBeta ? [12, 13] : [10,11]);
+                explanationEl.textContent = `Thăm nút MIN. Bắt đầu với minEval = +∞.`;
+                await delay(800);
+                node.value = Infinity;
+
+                for (const child of node.children) {
+                    highlightPseudocode(useAlphaBeta ? [14] : [12]);
+                    explanationEl.textContent = `Đi xuống nút con của MIN.`;
+                    updateNodeVisual(node);
+                    await delay(800);
+                    
+                    if(useAlphaBeta) { child.alpha = node.alpha; child.beta = node.beta; }
+                    const eval = await runMinimaxSimulation(child);
+
+                    nodeEl.classList.add('node-active');
+                    node.value = Math.min(node.value, eval);
+                    if(useAlphaBeta) node.beta = Math.min(node.beta, eval);
+                    updateNodeVisual(node);
+                    
+                    highlightPseudocode(useAlphaBeta ? [15, 16, 17] : [13, 14]);
+                    explanationEl.textContent = `Nút con trả về ${eval}. Cập nhật minEval=${node.value}` + (useAlphaBeta ? `, beta=${node.beta}.` : '.');
+                    await delay(1200);
+
+                    if (useAlphaBeta && node.beta <= node.alpha) {
+                        highlightPseudocode([18]);
+                        explanationEl.textContent = `CẮT TỈA! (beta ${node.beta} <= alpha ${node.alpha}). Bỏ qua các nhánh còn lại.`;
+                         const remainingChildren = node.children.slice(node.children.indexOf(child) + 1);
+                        remainingChildren.forEach(prunedChild => { document.getElementById(prunedChild.id).classList.add('node-pruned'); });
+                        await delay(1500);
+                        break;
+                    }
+                }
+                explanationEl.textContent = `Nút MIN hoàn tất. Trả về giá trị: ${node.value}.`;
+                await delay(800);
+                nodeEl.classList.remove('node-active');
+                return node.value;
+            }
+        }
+        
+        function setupNewTree() {
+            if (isSimulating) return;
+            nodeId = 0;
+            const depth = parseInt(depthSlider.value);
+            const branches = parseInt(branchesSlider.value);
+            rootNode = generateSimpleTree(depth, branches);
+            treeContainer.innerHTML = '';
+            const [rootEl, childrenEl] = renderTree(rootNode);
+            const treeWrapper = document.createElement('div');
+            treeWrapper.className = 'tree';
+            treeWrapper.appendChild(rootEl);
+            treeWrapper.appendChild(childrenEl);
+            treeContainer.appendChild(treeWrapper);
+            explanationEl.textContent = 'Cây đã sẵn sàng. Nhấn "Chạy Mô phỏng" để bắt đầu.';
+            updatePseudocodeDisplay();
+            highlightPseudocode([]);
+        }
+
+        depthSlider.addEventListener('input', (e) => { depthValueSpan.textContent = e.target.value; setupNewTree(); });
+        branchesSlider.addEventListener('input', (e) => { branchesValueSpan.textContent = e.target.value; setupNewTree(); });
+        algoSelectRadios.forEach(radio => radio.addEventListener('change', setupNewTree));
+        
+        runBtn.addEventListener('click', async () => {
+            if(isSimulating) return;
+            isSimulating = true;
+            runBtn.disabled = true; resetBtn.disabled = true;
+            depthSlider.disabled = true; branchesSlider.disabled = true;
+            algoSelectRadios.forEach(r => r.disabled = true);
+            await runMinimaxSimulation(rootNode);
+            isSimulating = false;
+            runBtn.disabled = false; resetBtn.disabled = false;
+            depthSlider.disabled = false; branchesSlider.disabled = false;
+            algoSelectRadios.forEach(r => r.disabled = false);
+        });
+        
+        resetBtn.addEventListener('click', () => { isSimulating = false; setupNewTree(); });
+
+        setupNewTree();
+
+    })();
+    
+
+    // --- CHESS GAME SCRIPT ---
+    const chessGame = (() => {
+        const pieces = {
+            'R': '♜', 'N': '♞', 'B': '♝', 'Q': '♛', 'K': '♚', 'P': '♟',
+            'r': '♖', 'n': '♘', 'b': '♗', 'q': '♕', 'k': '♔', 'p': '♙'
+        };
+        const initialBoard = [
+            ['R', 'N', 'B', 'Q', 'K', 'B', 'N', 'R'], ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'P'],
+            [null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null],
+            [null, null, null, null, null, null, null, null], [null, null, null, null, null, null, null, null],
+            ['p', 'p', 'p', 'p', 'p', 'p', 'p', 'p'], ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r']
+        ];
+        const pieceValues = { 'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900 };
+
+        let boardState = JSON.parse(JSON.stringify(initialBoard));
+        let selectedPiece = null, selectedSquare = null, possibleMoves = [], playerTurn = 'white', lastMove = { from: null, to: null };
+        let aiDepth = 3, isAiThinking = false, skipAiAnimation = false;
+
+        const boardElement = document.getElementById('chess-board');
+        const statusElement = document.getElementById('status');
+        const aiThinkingElement = document.getElementById('ai-thinking');
+        const restartButton = document.getElementById('restart-game-btn');
+        const difficultyInput = document.getElementById('difficulty-input');
+        const skipAiButton = document.getElementById('skip-ai-btn');
+        const thinkingTreeElement = document.getElementById('thinking-tree');
+        const aiExplanationElement = document.getElementById('ai-explanation');
+        const pseudocodeElement = document.getElementById('game-pseudocode');
+        const pseudocodeLines = pseudocodeElement.innerHTML.trim().split('\n');
+        
+        const isWhitePiece = (p) => p && p === p.toLowerCase();
+        const posToAlg = (r, c) => `${'abcdefgh'[c]}${8-r}`;
+        const getSquareElement = (row, col) => boardElement.children[row * 8 + col];
+        const clearAllHighlights = () => {
+            for(let i=0; i<64; i++) {
+                boardElement.children[i].classList.remove('thinking-highlight');
+            }
+        };
+
+        function createBoard() {
+            boardElement.innerHTML = '';
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = document.createElement('div');
+                    square.dataset.row = r;
+                    square.dataset.col = c;
+                    square.className = `flex items-center justify-center text-4xl md:text-5xl relative cursor-pointer ${(r + c) % 2 === 0 ? 'wood-light' : 'wood-dark'}`;
+                    if (boardState[r][c]) square.textContent = pieces[boardState[r][c]];
+                    square.addEventListener('click', onSquareClick);
+                    boardElement.appendChild(square);
+                }
+            }
+        }
+
+        function drawBoard() {
+            const squares = boardElement.children;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const square = squares[r * 8 + c];
+                    square.textContent = boardState[r][c] ? pieces[boardState[r][c]] : '';
+                    square.classList.remove('selected-piece', 'possible-move', 'last-move');
+                    if (selectedSquare && selectedSquare.row === r && selectedSquare.col === c) square.classList.add('selected-piece');
+                    if (possibleMoves.some(m => m.row === r && m.col === c)) square.classList.add('possible-move');
+                    if ((lastMove.from && lastMove.from.row === r && lastMove.from.col === c) || (lastMove.to && lastMove.to.row === r && lastMove.to.col === c)) {
+                        square.classList.add('last-move');
+                    }
+                }
+            }
+        }
+        
+        function onSquareClick(event) {
+            if (playerTurn !== 'white' || isAiThinking) return;
+            const square = event.currentTarget;
+            const row = parseInt(square.dataset.row), col = parseInt(square.dataset.col);
+
+            if (selectedPiece) {
+                if (possibleMoves.some(m => m.row === row && m.col === col)) {
+                    movePiece(selectedSquare, { row, col });
+                    playerTurn = 'black';
+                    statusElement.textContent = 'Lượt của Đen.';
+                    aiThinkingElement.classList.remove('hidden');
+                    setTimeout(makeAiMove, 100);
+                }
+                selectedPiece = null; selectedSquare = null; possibleMoves = [];
+            } else if (boardState[row][col] && isWhitePiece(boardState[row][col])) {
+                selectedPiece = boardState[row][col];
+                selectedSquare = { row, col };
+                possibleMoves = getPossibleMoves(selectedPiece, row, col, boardState);
+            }
+            drawBoard();
+        }
+
+        function movePiece(from, to) {
+            const piece = boardState[from.row][from.col];
+            boardState[to.row][to.col] = piece;
+            boardState[from.row][from.col] = null;
+            lastMove = { from, to };
+
+            if (piece === 'p' && to.row === 0) boardState[to.row][to.col] = 'q';
+            if (piece === 'P' && to.row === 7) boardState[to.row][to.col] = 'Q';
+            
+            selectedPiece = null; selectedSquare = null; possibleMoves = [];
+            drawBoard();
+            
+            const winner = checkGameOver();
+            if (winner) {
+                statusElement.textContent = `Chiếu hết! ${winner} thắng.`;
+                playerTurn = null;
+            }
+        }
+
+        function checkGameOver() {
+            if (isCheckmate('white', boardState)) return 'Đen';
+            if (isCheckmate('black', boardState)) return 'Trắng';
+            return null;
+        }
+
+        async function makeAiMove() {
+            isAiThinking = true;
+            skipAiAnimation = false;
+            skipAiButton.classList.remove('hidden');
+            clearAllHighlights();
+            
+            const { bestMove } = await findBestMoveVisual(boardState, aiDepth);
+
+            skipAiButton.classList.add('hidden');
+            isAiThinking = false;
+            
+            if (bestMove) {
+                movePiece(bestMove.from, bestMove.to);
+            }
+
+            playerTurn = 'white';
+            statusElement.textContent = 'Lượt của Trắng.';
+            aiThinkingElement.classList.add('hidden');
+            clearAllHighlights();
+            drawBoard();
+        }
+
+        function getPossibleMoves(piece, row, col, currentBoard) {
+            const moves = []; const type = piece.toLowerCase();
+            const isWhite = isWhitePiece(piece); const dir = isWhite ? -1 : 1;
+            const add = (r, c, type) => {
+                if (r<0||r>7||c<0||c>7) return false;
+                const target = currentBoard[r][c];
+                if (type === 'move') { if (!target) { moves.push({row: r, col: c}); return true; } }
+                if (type === 'capture') { if (target && isWhite !== isWhitePiece(target)) { moves.push({row: r, col: c}); } return false; }
+                if (type === 'all') { if (!target) { moves.push({row: r, col: c}); return true; } if (isWhite !== isWhitePiece(target)) { moves.push({row: r, col: c}); } }
+                return false;
+            };
+            if (type === 'p') {
+                if (add(row + dir, col, 'move')) { if ((isWhite ? 6 : 1) === row) add(row + 2 * dir, col, 'move'); }
+                add(row + dir, col-1, 'capture'); add(row + dir, col+1, 'capture');
+            } else {
+                const dirs = {
+                    'r': [[-1,0],[1,0],[0,-1],[0,1]], 'n': [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]],
+                    'b': [[-1,-1],[-1,1],[1,-1],[1,1]], 'q': [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]],
+                    'k': [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]],
+                }[type];
+                for (const [dr, dc] of dirs) {
+                    if (type === 'n' || type === 'k') { add(row+dr, col+dc, 'all'); }
+                    else { for (let i=1; i<8; i++) { if(!add(row+i*dr, col+i*dc, 'all')) break; } }
+                }
+            }
+            return moves.filter(m => {
+                const tempBoard = JSON.parse(JSON.stringify(currentBoard));
+                tempBoard[m.row][m.col] = tempBoard[row][col]; tempBoard[row][col] = null;
+                return !isKingInCheck(isWhite ? 'white' : 'black', tempBoard);
+            });
+        }
+
+        function getAllPossibleMoves(color, board) {
+            const allMoves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    if (piece && (color === 'white' ? isWhitePiece(piece) : (piece === piece.toUpperCase()))) {
+                        const moves = getPossibleMoves(piece, r, c, board);
+                        moves.forEach(move => allMoves.push({ from: { row: r, col: c }, to: move, piece }));
+                    }
+                }
+            }
+            return allMoves;
+        }
+        
+        function isKingInCheck(color, board) {
+            const kingPiece = color === 'white' ? 'k' : 'K';
+            let kingPos;
+            for (let r = 0; r < 8; r++) for (let c = 0; c < 8; c++) if (board[r][c] === kingPiece) kingPos = {r,c};
+            if (!kingPos) return true; 
+
+            const opponentColor = color === 'white' ? 'black' : 'white';
+            const opponentMoves = [];
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const piece = board[r][c];
+                    if (piece && (opponentColor === 'white' ? isWhitePiece(piece) : (piece === piece.toUpperCase()))) {
+                        const moves = getBasePossibleMoves(piece, r, c, board);
+                        moves.forEach(move => opponentMoves.push(move));
+                    }
+                }
+            }
+            return opponentMoves.some(m => m.row === kingPos.r && m.col === kingPos.c);
+        }
+        
+        function getBasePossibleMoves(piece, row, col, currentBoard) {
+            const moves = []; const type = piece.toLowerCase();
+            const isWhite = isWhitePiece(piece); const dir = isWhite ? -1 : 1;
+            const add = (r, c, type) => {
+                if (r<0||r>7||c<0||c>7) return false;
+                const target = currentBoard[r][c];
+                if (type === 'move') { if (!target) { moves.push({row: r, col: c}); return true; } }
+                if (type === 'capture') { if (target && isWhite !== isWhitePiece(target)) { moves.push({row: r, col: c}); } return false; }
+                if (type === 'all') { if (!target) { moves.push({row: r, col: c}); return true; } if (isWhite !== isWhitePiece(target)) { moves.push({row: r, col: c}); } }
+                return false;
+            };
+            if (type === 'p') {
+                add(row+dir, col, 'move');
+                add(row+dir, col-1, 'capture'); add(row+dir, col+1, 'capture');
+            } else {
+                 const dirs = {
+                    'r': [[-1,0],[1,0],[0,-1],[0,1]], 'n': [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]],
+                    'b': [[-1,-1],[-1,1],[1,-1],[1,1]], 'q': [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]],
+                    'k': [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]],
+                }[type];
+                 for (const [dr, dc] of dirs) {
+                    if (type === 'n' || type === 'k') { add(row+dr, col+dc, 'all'); }
+                    else { for (let i=1; i<8; i++) { if(!add(row+i*dr, col+i*dc, 'all')) break; } }
+                }
+            }
+            return moves;
+        }
+        
+        function isCheckmate(color, board) {
+            if (!isKingInCheck(color, board)) return false;
+            return getAllPossibleMoves(color, board).length === 0;
+        }
+
+        function evaluateBoard(board) {
+            let total = 0;
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    if (board[r][c]) {
+                        const piece = board[r][c];
+                        const value = pieceValues[piece.toLowerCase()] || 0;
+                        total += isWhitePiece(piece) ? value : -value;
+                    }
+                }
+            }
+            return total;
+        }
+        
+        function highlightPseudocode(lines) {
+            pseudocodeElement.innerHTML = pseudocodeLines.map((l, i) =>
+                lines.includes(i) ? `<span class="code-highlight">${l}</span>` : l
+            ).join('\n');
+        }
+
+        function updateThinkingTree(path) {
+            thinkingTreeElement.innerHTML = path.map(node => {
+                const moveStr = node.move ? `${pieces[node.move.piece]} ${posToAlg(node.move.from.row, node.move.from.col)} → ${posToAlg(node.move.to.row, node.move.to.col)}` : 'Gốc';
+                const scoreStr = node.eval !== undefined ? ` | val: ${node.eval}` : '';
+                const alphaBetaStr = ` | α:${node.alpha.toFixed(0)}, β:${node.beta.toFixed(0)}`;
+                const cls = node.isMax ? 'max-node' : 'min-node';
+                return `<div class="thinking-node ${cls}" style="padding-left: ${node.depth * 10 + 4}px;">${moveStr}${scoreStr}${alphaBetaStr}</div>`;
+            }).join('');
+            thinkingTreeElement.scrollTop = thinkingTreeElement.scrollHeight;
+        }
+
+        async function* minimaxVisual(board, depth, alpha, beta, isMaximizingPlayer, path) {
+            if (depth === 0) {
+                const score = -evaluateBoard(board);
+                if (!skipAiAnimation) {
+                    highlightPseudocode([1]); aiExplanationElement.textContent = `Đạt độ sâu tối đa. Đánh giá: ${score}`; await delay(50);
+                }
+                path[path.length - 1].eval = score; updateThinkingTree(path); return score;
+            }
+
+            const moves = getAllPossibleMoves(isMaximizingPlayer ? 'black' : 'white', board);
+            if (moves.length === 0) return -evaluateBoard(board);
+
+            if (isMaximizingPlayer) {
+                let maxEval = -Infinity;
+                for (const move of moves) {
+                    path.push({ depth: path.length, move, isMax: true, alpha, beta });
+                    const fromSq = getSquareElement(move.from.row, move.from.col);
+                    const toSq = getSquareElement(move.to.row, move.to.col);
+                    if (!skipAiAnimation) {
+                        fromSq.classList.add('thinking-highlight'); toSq.classList.add('thinking-highlight');
+                        updateThinkingTree(path); highlightPseudocode([5]);
+                        aiExplanationElement.textContent = `[MAX] Thử ${posToAlg(move.from.row, move.from.col)}→${posToAlg(move.to.row, move.to.col)}`;
+                        await delay(100);
+                    }
+                    const tempBoard = JSON.parse(JSON.stringify(board));
+                    tempBoard[move.to.row][move.to.col] = move.piece; tempBoard[move.from.row][move.from.col] = null;
+                    const evaluation = yield* minimaxVisual(tempBoard, depth - 1, alpha, beta, false, path);
+                    maxEval = Math.max(maxEval, evaluation); alpha = Math.max(alpha, evaluation);
+                    path[path.length - 1].eval = evaluation; path[path.length - 1].alpha = alpha; path[path.length - 1].beta = beta;
+                    if (!skipAiAnimation) {
+                        updateThinkingTree(path); highlightPseudocode([6, 7]);
+                        aiExplanationElement.textContent = `[MAX] Nước đi có giá trị ${evaluation}. maxEval: ${maxEval}`;
+                        await delay(100);
+                        fromSq.classList.remove('thinking-highlight'); toSq.classList.remove('thinking-highlight');
+                    }
+                    path.pop();
+                    if (beta <= alpha) {
+                        if (!skipAiAnimation) { highlightPseudocode([8]); aiExplanationElement.textContent = `[MAX] Cắt tỉa! (β ${beta.toFixed(0)} ≤ α ${alpha.toFixed(0)})`; await delay(200); }
+                        break;
+                    }
+                }
+                return maxEval;
+            } else {
+                let minEval = Infinity;
+                for (const move of moves) {
+                    path.push({ depth: path.length, move, isMax: false, alpha, beta });
+                     const fromSq = getSquareElement(move.from.row, move.from.col);
+                     const toSq = getSquareElement(move.to.row, move.to.col);
+                    if (!skipAiAnimation) {
+                        fromSq.classList.add('thinking-highlight'); toSq.classList.add('thinking-highlight');
+                        updateThinkingTree(path); highlightPseudocode([12]);
+                        aiExplanationElement.textContent = `[MIN] Thử ${posToAlg(move.from.row, move.from.col)}→${posToAlg(move.to.row, move.to.col)}`;
+                        await delay(100);
+                    }
+                    const tempBoard = JSON.parse(JSON.stringify(board));
+                    tempBoard[move.to.row][move.to.col] = move.piece; tempBoard[move.from.row][move.from.col] = null;
+                    const evaluation = yield* minimaxVisual(tempBoard, depth - 1, alpha, beta, true, path);
+                    minEval = Math.min(minEval, evaluation); beta = Math.min(beta, evaluation);
+                    path[path.length - 1].eval = evaluation; path[path.length - 1].alpha = alpha; path[path.length - 1].beta = beta;
+                    if (!skipAiAnimation) {
+                        updateThinkingTree(path); highlightPseudocode([13, 14]);
+                        aiExplanationElement.textContent = `[MIN] Nước đi có giá trị ${evaluation}. minEval: ${minEval}`;
+                        await delay(100);
+                        fromSq.classList.remove('thinking-highlight'); toSq.classList.remove('thinking-highlight');
+                    }
+                    path.pop();
+                    if (beta <= alpha) {
+                        if (!skipAiAnimation) { highlightPseudocode([15]); aiExplanationElement.textContent = `[MIN] Cắt tỉa! (β ${beta.toFixed(0)} ≤ α ${alpha.toFixed(0)})`; await delay(200); }
+                        break;
+                    }
+                }
+                return minEval;
+            }
+        }
+
+        async function findBestMoveVisual(board, depth) {
+            let bestMove = null, bestValue = -Infinity;
+            const moves = getAllPossibleMoves('black', board);
+            thinkingTreeElement.innerHTML = ''; aiExplanationElement.textContent = 'Bắt đầu tìm nước đi tốt nhất...';
+            for (const move of moves) {
+                const path = [{ depth: 0, move: null, isMax: true, alpha: -Infinity, beta: Infinity }];
+                path.push({ depth: 1, move, isMax: true, alpha: bestValue, beta: Infinity});
+                if (!skipAiAnimation) {
+                     updateThinkingTree(path.slice(0,2));
+                     aiExplanationElement.textContent = `Đánh giá nước đi gốc: ${posToAlg(move.from.row, move.from.col)}→${posToAlg(move.to.row, move.to.col)}`;
+                     await delay(100);
+                }
+                const tempBoard = JSON.parse(JSON.stringify(board));
+                tempBoard[move.to.row][move.to.col] = move.piece; tempBoard[move.from.row][move.from.col] = null;
+                const generator = minimaxVisual(tempBoard, depth - 1, bestValue, Infinity, false, path);
+                let result = await generator.next();
+                while (!result.done) { result = await generator.next(); }
+                const boardValue = result.value;
+                if (boardValue > bestValue) {
+                    bestValue = boardValue; bestMove = move;
+                }
+            }
+            aiExplanationElement.textContent = `Hoàn tất! Nước đi tốt nhất là ${posToAlg(bestMove.from.row, bestMove.from.col)}→${posToAlg(bestMove.to.row, bestMove.to.col)} (giá trị ${bestValue.toFixed(2)}).`;
+            highlightPseudocode([]);
+            return { bestMove, bestValue };
+        }
+        
+        function resetGame() {
+            boardState = JSON.parse(JSON.stringify(initialBoard));
+            selectedPiece = null; selectedSquare = null; possibleMoves = []; playerTurn = 'white';
+            lastMove = { from: null, to: null };
+            let newDepth = parseInt(difficultyInput.value, 10);
+            aiDepth = isNaN(newDepth) ? 3 : Math.max(1, Math.min(25, newDepth));
+            difficultyInput.value = aiDepth;
+            statusElement.textContent = 'Lượt của Trắng.';
+            isAiThinking = false; skipAiAnimation = true;
+            aiThinkingElement.classList.add('hidden');
+            skipAiButton.classList.add('hidden');
+            thinkingTreeElement.innerHTML = 'Chờ AI suy nghĩ...';
+            aiExplanationElement.textContent = '...';
+            highlightPseudocode([]);
+            clearAllHighlights();
+            drawBoard();
+        }
+
+        restartButton.addEventListener('click', resetGame);
+        difficultyInput.addEventListener('change', resetGame);
+        skipAiButton.addEventListener('click', () => {
+            skipAiAnimation = true;
+            aiExplanationElement.textContent = 'Đang bỏ qua animation...';
+        });
+        
+        createBoard();
+        drawBoard();
+    })();
+});
+</script>
+</body>
+</html>
+
